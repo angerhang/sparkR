@@ -1,0 +1,47 @@
+---
+title: "Intro to SparkR"
+author: "Hang Yuan"
+date: "November 29, 2015"
+output: html_document
+---
+This is a report on SparkR using R Markdown. 
+## Spark Installation
+First go to [Spark](http://spark.apache.org) to download the appropriate Spark
+installation. In this tutorial we have 1.5.2 with the package type that is pre-built
+for Hadoop 2.6 and later. For the download type, choose direct download. 
+
+After you unpack the package, place it in your desired directory and you can proceed to the 
+next steps.
+
+## Load SparkR in RStudio 
+We need to set the environment and the libaray paths
+```{r}
+Sys.setenv(SPARK_HOME= "/Users/yuancalvin/spark-1.5.2")
+.libPaths(c(file.path(Sys.getenv("SPARK_HOME"), "R", "lib"), .libPaths()))
+```
+
+Now we can load SparkR library 
+
+```{r}
+library(SparkR)
+sc <- sparkR.init(master="local")
+```
+
+## SparkR Basics
+Let's first look at some simple operations using SparkR. Unlike a regular R object,
+wif we have a file we cannot direclty see what a file looks like by using `view`
+
+We first read the textFile into myFile and use `take` to look at the first 10 lines of
+`README.md`
+```{r}
+myFile <- SparkR:::textFile(sc, "/Users/yuancalvin/spark-1.5.2/README.md")
+take(myFile, 10)
+words <- SparkR:::flatMap(myFile, function(line) {strsplit(line, " ")[[1]]})
+wordCount <- SparkR:::lapply(words, function(word) {list(word, 1)})
+counts <- SparkR:::reduceByKey(wordCount, "+" , 2)
+output <- collect(counts)
+k = lapply(output, unlist)
+m <- data.frame(t(data.frame(k)))
+head(m)
+```
+
