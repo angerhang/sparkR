@@ -32,9 +32,10 @@ Let's first look at some simple operations using SparkR. Unlike a regular R obje
 wif we have a file we cannot direclty see what a file looks like by using `view`
 
 We first read the textFile into myFile and use `take` to look at the first 10 lines of
-`README.md`
+`city.txt`
 ```{r}
-myFile <- SparkR:::textFile(sc, "/Users/yuancalvin/spark-1.5.2/README.md")
+start.time <- Sys.time()
+myFile <- SparkR:::textFile(sc, "/Users/yuancalvin/Desktop/city.txt")
 take(myFile, 10)
 words <- SparkR:::flatMap(myFile, function(line) {strsplit(line, " ")[[1]]})
 wordCount <- SparkR:::lapply(words, function(word) {list(word, 1)})
@@ -43,5 +44,37 @@ output <- collect(counts)
 k = lapply(output, unlist)
 m <- data.frame(t(data.frame(k)))
 head(m)
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+```
+
+Let's see the wordcount example using plain R
+```{r}
+start.time <- Sys.time()
+X <- scan("/Users/yuancalvin/Desktop/city.txt", what = character());
+counts <- rle(X);
+countsTbale <- data.frame(number=counts$values, n=counts$lengths);
+countsTbale <- countsTbale[order(-countsTbale$n), ];
+end.time <- Sys.time()
+time.taken <- end.time - start.time
+time.taken
+```
+
+An example of linear regression
+```{r}
+library(SparkR)
+Sys.setenv('SPARKR_SUBMIT_ARGS'='"--packages" "com.databricks:spark-csv_2.10:1.0.3" "sparkr-shell"')
+sqlContext <- sparkRSQL.init(sc)
+
+# Read csv into sparkR format
+df <- read.df(sqlContext, "2008.csv", source = "com.databricks.spark.csv", header= "true")
+
+# Make the training set on the ones that don't have null
+training <- dropna(df)
+showDF(select(training,"UniqueCarrier","ArrTime","AirTime","Distance", "DepDelay"))
+
+model <- glm(DepDelay ~ UniqueCarrier , family = "gaussian", data = training)
+summary(model)
 ```
 
