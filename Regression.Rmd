@@ -1,0 +1,88 @@
+---
+title: "Linear and Logistic Regressions using SparkR"
+author: "Hang Yuan"
+date: "December 15, 2015"
+output: html_document
+---
+
+We will try to run both linear and logistic regressions using SparkR. We will use a small
+dataset `cats` from MASS package. Basically each entry has a gender, body weight and heart weight, but
+first we will try to look a quick look at what our dataset is like.
+
+### Dataset info
+```{r}
+library("MASS")
+data(cats)
+head(cats)
+summary(cats)
+```
+
+Now we want to look at correlation between body weight and heart weight. Intuitively a larger hear weight should result in
+a larger body weight. drawing the scatter-plot to have an intuition. The scatter-plot confirms the intuition.
+
+```{r}
+plot(cats$Hwt, cats$Bwt, xlab = "Heart weight", ylab = "Body weight", main = "Body weight vs Heart weight")
+```
+
+### SparkR setup
+Now we need to init sparkR. We will also need sqlContext to convert the local data frame from R to DataFrame.
+In an interactive shell, these two should be already created.
+
+```{r}
+Sys.setenv(SPARK_HOME= "/Users/yuancalvin/spark-1.5.2") # Set this to where sparkR is installed
+.libPaths(c(file.path(Sys.getenv("SPARK_HOME"), "R", "lib"), .libPaths()))
+library(SparkR)
+sc <- sparkR.init(master="local")
+sqlContext <- sparkRSQL.init(sc)
+```
+
+### Convert R data frame to DataFrame
+DataFrame is essentially the Spark version data frame with better optimization.
+Since the logistic regression doesn't muti-classification yet, we need to transform
+the `M` to 1 and `F` to 0 for `sex`.
+```{r}
+toConvert <- function(x){
+  if (x == 'F'){
+     x <- 0
+  } else {
+    x <-1
+  }
+}
+cats$Sex <- unlist(lapply(cats$Sex, toConvert))
+# Split the data into training and test sets
+library(caret)
+set.seed(100)
+trainIndex <- createDataPartition(cats$Sex, p = .7,
+                                  list = FALSE,
+                                  times = 1)
+head(trainIndex)
+train <- cats[trainIndex, ]
+test <- cats[-trainIndex, ]
+
+# Change F into 1 and M into 2 for logistic regression
+trainDF <- SparkR::createDataFrame(sqlContext, train)
+testDF <- SparkR::createDataFrame(sqlContext, test)
+head(trainDF)
+```
+
+### Linear Regression
+Using `SparkR::glm` is almost identical as what one would have for `glm` except that `summary()` is not yet
+supported for `glm`. `ggplot` is currently not available for RDD.
+
+```{r}
+lin_spark <- SparkR::glm(Bwt ~ Hwt, data = trainDF, family = "gaussian")
+predications <- SparkR::predict(lin_spark, testDF)
+showDF(SparkR::select(predications, "Bwt", "prediction"))
+# abline(lin_spark)
+```
+
+### Logstic Regression
+Now we will run a logistic regression using sex of each cat as the dependent variable.
+
+```{r}
+model_log <- SparkR::glm(Sex ~ Bwt + Hwt, data= trainDF, family = "binomial")
+predications <- SparkR::predict(model_log, testDF)
+showDF(SparkR::select(predications, "Sex", "prediction"))
+```
+
+
